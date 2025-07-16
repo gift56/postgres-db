@@ -6,6 +6,7 @@ dotenv.config();
 const { PGHOST, PGDATABASE, PGUSER, PGPASSWORD } = process.env;
 
 // CREATING A SQL DATABASE CONNECTION TO NEON
+
 export const sql = neon(
   `postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}/${PGDATABASE}?sslmode=require&channel_binding=require`
 );

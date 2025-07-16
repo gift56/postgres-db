@@ -3,10 +3,11 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+
 import productRoutes from "./routes/productRoutes.js";
 import { sql } from "./config/db.js";
 import { aj } from "./libs/arcjet.js";
-import path from "path";
 
 dotenv.config();
 
@@ -21,28 +22,22 @@ app.use(
     contentSecurityPolicy: false,
   })
 ); // helmet is a security middleware that helps you protect your app by setting various HTTP headers
-app.use(morgan("dev")); // log the request made on development
+app.use(morgan("dev")); // log the requests
 
-// Using arcjet on all route
+// apply arcjet rate-limit to all routes
 app.use(async (req, res, next) => {
   try {
     const decision = await aj.protect(req, {
-      requested: 1,
+      requested: 1, // specifies that each request consumes 1 token
     });
 
     if (decision.isDenied()) {
       if (decision.reason.isRateLimit()) {
-        res.status(429).json({
-          error: "Too Many Requests",
-        });
+        res.status(429).json({ error: "Too Many Requests" });
       } else if (decision.reason.isBot()) {
-        res.status(403).json({
-          error: "Bot access denied",
-        });
+        res.status(403).json({ error: "Bot access denied" });
       } else {
-        res.status(403).json({
-          error: "Forbidden Requests",
-        });
+        res.status(403).json({ error: "Forbidden" });
       }
       return;
     }
@@ -53,15 +48,13 @@ app.use(async (req, res, next) => {
         (result) => result.reason.isBot() && result.reason.isSpoofed()
       )
     ) {
-      res.status(403).json({
-        error: "Forbidden Spoofed bot detected",
-      });
+      res.status(403).json({ error: "Spoofed bot detected" });
       return;
     }
 
     next();
   } catch (error) {
-    console.log("🚀 ~ app.use ~ error:", error);
+    console.log("Arcjet error", error);
     next(error);
   }
 });
@@ -72,7 +65,7 @@ if (process.env.NODE_ENV === "production") {
   // server our react app
   app.use(express.static(path.join(__dirname, "/frontend/dist")));
 
-  app.get("*", (req, res) => {
+  app.get("/{*any}", (req, res) => {
     res.sendFile(path.resolve(__dirname, "frontend", "dist", "index.html"));
   });
 }
@@ -80,23 +73,23 @@ if (process.env.NODE_ENV === "production") {
 async function initDB() {
   try {
     await sql`
-    CREATE TABLE IF NOT EXISTS products (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      image VARCHAR(255) NOT NULL,
-      price DECIMAL(10, 2) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        image VARCHAR(255) NOT NULL,
+        price DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `;
 
-    console.log("Connected Successfully! 🎉🎉");
+    console.log("Database initialized successfully");
   } catch (error) {
-    console.log("🚀 ~ initDB ~ error:", error);
+    console.log("Error initDB", error);
   }
 }
 
 initDB().then(() => {
   app.listen(PORT, () => {
-    console.log("App Listening on port " + PORT);
+    console.log("Server is running on port " + PORT);
   });
 });
